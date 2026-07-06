@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jail BOLO — ERLC Dispatch Console</title>
+<style>
+  :root{
+    --bg:#0b0d0e;
+    --panel:#14181a;
+    --panel-2:#1b2022;
+    --border:#262d2f;
+    --amber:#ffb020;
+    --amber-dim:#8a6420;
+    --red:#ff4d3d;
+    --green:#3fd17a;
+    --text:#e7ebec;
+    --muted:#7c8a8f;
+    --mono: 'JetBrains Mono', 'Courier New', monospace;
+    --head: 'Rajdhani', 'Oswald', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(ellipse at top, #17191a 0%, var(--bg) 55%);
+    color:var(--text);
+    font-family: var(--mono);
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:32px 16px;
+  }
+  .console{
+    width:100%;
+    max-width:620px;
+  }
+  .titlebar{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    border-bottom:2px solid var(--amber-dim);
+    padding-bottom:10px;
+    margin-bottom:18px;
+  }
+  .titlebar h1{
+    font-family: var(--head), sans-serif;
+    font-weight:600;
+    letter-spacing:2px;
+    font-size:22px;
+    margin:0;
+    color:var(--amber);
+    text-transform:uppercase;
+  }
+  .titlebar .code{
+    font-size:12px;
+    color:var(--muted);
+    letter-spacing:1px;
+  }
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:18px;
+    margin-bottom:16px;
+  }
+  .panel h2{
+    font-family:var(--head), sans-serif;
+    font-size:14px;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin:0 0 12px 0;
+  }
+  label{
+    display:block;
+    font-size:11px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  input[type=text], input[type=password], textarea{
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    font-family:var(--mono);
+    font-size:14px;
+    padding:10px 12px;
+    border-radius:4px;
+    outline:none;
+  }
+  input:focus, textarea:focus, button:focus-visible{
+    border-color:var(--amber);
+    box-shadow:0 0 0 2px rgba(255,176,32,0.25);
+  }
+  .row{
+    display:flex;
+    gap:10px;
+    align-items:flex-end;
+  }
+  .row > div{flex:1;}
+  .status-pill{
+    font-size:11px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    padding:6px 10px;
+    border-radius:20px;
+    border:1px solid var(--border);
+    color:var(--muted);
+    white-space:nowrap;
+  }
+  .status-pill.ok{color:var(--green);border-color:var(--green);}
+  .status-pill.err{color:var(--red);border-color:var(--red);}
+  button{
+    font-family:var(--head), sans-serif;
+    font-weight:600;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    cursor:pointer;
+    border-radius:4px;
+    border:1px solid var(--border);
+    background:var(--panel-2);
+    color:var(--text);
+    padding:10px 16px;
+    font-size:13px;
+    transition:transform .05s ease;
+  }
+  button:active{transform:scale(.97);}
+  button.ghost{background:transparent;}
+  button.primary{
+    background:var(--amber);
+    border-color:var(--amber);
+    color:#1a1300;
+  }
+  button.danger{
+    background:var(--red);
+    border-color:var(--red);
+    color:#1a0000;
+  }
+  button:disabled{opacity:.5;cursor:not-allowed;}
+ 
+  .bolo-btn{
+    width:100%;
+    padding:22px;
+    font-size:18px;
+    letter-spacing:2px;
+    background:linear-gradient(180deg, #241a08, #14100a);
+    border:1px solid var(--amber-dim);
+    color:var(--amber);
+    position:relative;
+  }
+  .bolo-btn:hover{border-color:var(--amber);}
+  .bolo-btn .sub{
+    display:block;
+    font-family:var(--mono);
+    font-weight:400;
+    font-size:11px;
+    letter-spacing:1px;
+    color:var(--muted);
+    margin-top:6px;
+    text-transform:none;
+  }
+ 
+  .log{
+    height:180px;
+    overflow-y:auto;
+    font-size:12.5px;
+    line-height:1.6;
+    color:var(--muted);
+  }
+  .log .entry{margin-bottom:2px;}
+  .log .entry.ok{color:var(--green);}
+  .log .entry.err{color:var(--red);}
+  .log .entry .ts{color:var(--amber-dim);margin-right:8px;}
+ 
+  /* Modal */
+  .overlay{
+    position:fixed; inset:0;
+    background:rgba(0,0,0,.65);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:50;
+    padding:16px;
+  }
+  .overlay.open{display:flex;}
+  .modal{
+    width:100%;
+    max-width:420px;
+    background:var(--panel);
+    border:1px solid var(--amber-dim);
+    border-radius:8px;
+    padding:22px;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .modal-head{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .modal-head .dot{
+    width:10px;height:10px;border-radius:50%;
+    background:var(--red);
+    box-shadow:0 0 8px var(--red);
+    animation:pulse 1.2s infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+  .modal-head h3{
+    font-family:var(--head), sans-serif;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    font-size:16px;
+    margin:0;
+    color:var(--amber);
+  }
+  .field{margin-bottom:14px;}
+  .modal-actions{
+    display:flex;
+    gap:10px;
+    margin-top:18px;
+  }
+  .modal-actions button{flex:1;}
+  .hint{font-size:11px;color:var(--muted);margin-top:6px;}
+  .preview{
+    font-size:12px;
+    color:var(--muted);
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:8px 10px;
+    margin-top:4px;
+  }
+  .preview b{color:var(--amber);font-weight:400;}
+  footer{
+    text-align:center;
+    font-size:11px;
+    color:var(--muted);
+    margin-top:20px;
+    letter-spacing:.5px;
+  }
+</style>
+</head>
+<body>
+ 
+<div class="console">
+  <div class="titlebar">
+    <h1>Jail BOLO Console</h1>
+    <span class="code">ERLC PRIVATE SERVER API</span>
+  </div>
+ 
+  <div class="panel">
+    <h2>Server Connection</h2>
+    <div class="row">
+      <div>
+        <label for="serverKey">Server Key</label>
+        <input type="password" id="serverKey" placeholder="Paste your ERLC server key" autocomplete="off">
+      </div>
+      <button class="ghost" id="toggleKey" type="button" title="Show/hide key">👁</button>
+      <button class="ghost" id="testConn" type="button">Test</button>
+    </div>
+    <div class="field" style="margin-top:10px;">
+      <label for="apiBase">API Base URL</label>
+      <input type="text" id="apiBase" value="https://api.erlc.gg/v2">
+      <p class="hint">Getting a CORS/blocked error? Run <b style="color:var(--amber);">erlc-proxy.js</b> (see below) and change this to <code>http://localhost:3000/v2</code> instead.</p>
+    </div>
+    <div style="margin-top:10px;display:flex;justify-content:flex-end;">
+      <span class="status-pill" id="connStatus">Not tested</span>
+    </div>
+    <p class="hint">Your key is only kept in this browser tab's memory — it is never saved anywhere except sent to whichever API base URL is set above.</p>
+  </div>
+ 
+  <div class="panel">
+    <h2>Dispatch</h2>
+    <button class="bolo-btn" id="openBolo" type="button">
+      🚨 Issue Jail BOLO
+      <span class="sub">Flags a player wanted, broadcasts an alert, and jails them</span>
+    </button>
+  </div>
+ 
+  <div class="panel">
+    <h2>Activity Log</h2>
+    <div class="log" id="log">
+      <div class="entry">Waiting for dispatch…</div>
+    </div>
+  </div>
+ 
+  <footer>Requires the ERLC API server pack &amp; a valid server key · api.erlc.gg/v2</footer>
+</div>
+ 
+<!-- Modal -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="dot"></span>
+      <h3>New Jail BOLO</h3>
+    </div>
+ 
+    <div class="field">
+      <label for="username">Roblox Username</label>
+      <input type="text" id="username" placeholder="e.g. mrfergie" autocomplete="off">
+    </div>
+ 
+    <div class="field">
+      <label for="reason">Reason <span style="text-transform:none;color:var(--muted);">(optional)</span></label>
+      <input type="text" id="reason" placeholder="e.g. Fled a traffic stop">
+      <div class="preview" id="preview">Commands will run: <b>:wanted</b>, <b>:h</b>, <b>:jail</b></div>
+    </div>
+ 
+    <div class="modal-actions">
+      <button class="ghost" id="cancelBtn" type="button">Cancel</button>
+      <button class="danger" id="confirmBtn" type="button">Confirm &amp; Dispatch</button>
+    </div>
+  </div>
+</div>
+ 
+<script>
+(function(){
+  const serverKeyInput = document.getElementById('serverKey');
+  const toggleKeyBtn = document.getElementById('toggleKey');
+  const testConnBtn = document.getElementById('testConn');
+  const connStatus = document.getElementById('connStatus');
+  const openBoloBtn = document.getElementById('openBolo');
+  const overlay = document.getElementById('overlay');
+  const cancelBtn = document.getElementById('cancelBtn');
+  const confirmBtn = document.getElementById('confirmBtn');
+  const usernameInput = document.getElementById('username');
+  const reasonInput = document.getElementById('reason');
+  const logEl = document.getElementById('log');
+ 
+  const apiBaseInput = document.getElementById('apiBase');
+  function getApiBase(){
+    return (apiBaseInput.value.trim() || 'https://api.erlc.gg/v2').replace(/\/$/, '');
+  }
+ 
+  function log(msg, kind){
+    const ts = new Date().toLocaleTimeString();
+    const div = document.createElement('div');
+    div.className = 'entry' + (kind ? ' ' + kind : '');
+    div.innerHTML = '<span class="ts">' + ts + '</span>' + msg;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+ 
+  toggleKeyBtn.addEventListener('click', function(){
+    serverKeyInput.type = serverKeyInput.type === 'password' ? 'text' : 'password';
+  });
+ 
+  function getKey(){
+    const key = serverKeyInput.value.trim();
+    if(!key){
+      alert('Enter your ERLC server key first.');
+    }
+    return key;
+  }
+ 
+  async function runCommand(key, command){
+    const res = await fetch(getApiBase() + '/server/command', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'server-key': key
+      },
+      body: JSON.stringify({ command })
+    });
+    let data = {};
+    try { data = await res.json(); } catch(e) {}
+    return { ok: res.ok, status: res.status, data };
+  }
+ 
+  testConnBtn.addEventListener('click', async function(){
+    const key = getKey();
+    if(!key) return;
+    connStatus.textContent = 'Testing…';
+    connStatus.className = 'status-pill';
+    try{
+      const res = await fetch(getApiBase() + '/server', {
+        method: 'GET',
+        headers: { 'server-key': key }
+      });
+      if(res.ok){
+        const data = await res.json();
+        connStatus.textContent = 'Connected: ' + (data.Name || 'server online');
+        connStatus.className = 'status-pill ok';
+        log('Connected to server "' + (data.Name || 'unknown') + '".', 'ok');
+      } else {
+        connStatus.textContent = 'Error ' + res.status;
+        connStatus.className = 'status-pill err';
+        log('Connection test failed (HTTP ' + res.status + ').', 'err');
+      }
+    }catch(err){
+      connStatus.textContent = 'Blocked / offline';
+      connStatus.className = 'status-pill err';
+      log('Connection test failed — request was blocked (likely CORS) or the network is unreachable.', 'err');
+    }
+  });
+ 
+  function openModal(){
+    if(!serverKeyInput.value.trim()){
+      alert('Enter your ERLC server key first.');
+      return;
+    }
+    usernameInput.value = '';
+    reasonInput.value = '';
+    overlay.classList.add('open');
+    setTimeout(()=>usernameInput.focus(), 50);
+  }
+  function closeModal(){
+    overlay.classList.remove('open');
+  }
+ 
+  openBoloBtn.addEventListener('click', openModal);
+  cancelBtn.addEventListener('click', closeModal);
+  overlay.addEventListener('click', function(e){ if(e.target === overlay) closeModal(); });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && overlay.classList.contains('open')) closeModal();
+  });
+ 
+  confirmBtn.addEventListener('click', async function(){
+    const key = serverKeyInput.value.trim();
+    const username = usernameInput.value.trim();
+    const reason = reasonInput.value.trim();
+ 
+    if(!username){
+      alert('Enter the player\'s Roblox username.');
+      usernameInput.focus();
+      return;
+    }
+ 
+    confirmBtn.disabled = true;
+    cancelBtn.disabled = true;
+    confirmBtn.textContent = 'Dispatching…';
+ 
+    const alertMsg = '🚨 BOLO: ' + username + (reason ? ' — ' + reason : ' — wanted for questioning');
+    const commands = [
+      ':wanted ' + username,
+      ':h ' + alertMsg,
+      ':jail ' + username
+    ];
+ 
+    log('Dispatching Jail BOLO for <b style="color:var(--amber)">' + username + '</b>' + (reason ? ' (' + reason + ')' : '') + '…');
+ 
+    let allOk = true;
+    for(const cmd of commands){
+      try{
+        const result = await runCommand(key, cmd);
+        if(result.ok){
+          log('Sent: <span style="color:var(--text)">' + cmd + '</span>', 'ok');
+        } else {
+          allOk = false;
+          log('Failed: <span style="color:var(--text)">' + cmd + '</span> — ' + (result.data && result.data.message ? result.data.message : 'HTTP ' + result.status), 'err');
+        }
+      }catch(err){
+        allOk = false;
+        log('Failed: <span style="color:var(--text)">' + cmd + '</span> — request blocked or network error.', 'err');
+        break;
+      }
+      await new Promise(r => setTimeout(r, 600)); // stay under rate limits
+    }
+ 
+    if(allOk){
+      log('BOLO complete — ' + username + ' is wanted, alerted, and jailed.', 'ok');
+    } else {
+      log('BOLO finished with errors — check the log above.', 'err');
+    }
+ 
+    confirmBtn.disabled = false;
+    cancelBtn.disabled = false;
+    confirmBtn.textContent = 'Confirm & Dispatch';
+    closeModal();
+  });
+})();
+</script>
+</body>
+</html>
